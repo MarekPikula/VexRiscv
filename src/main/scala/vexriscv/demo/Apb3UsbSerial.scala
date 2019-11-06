@@ -130,20 +130,20 @@ class usb_serial(usbConfig: USBSerialConfig) extends BlackBox {
 // usb_phy core
 class usb_phy() extends BlackBox {
   val io = new Bundle {
-    val clk         = in Bool
-    val rstp        = in Bool
-    val phy_tx_mode = in Bool
+    val clk         = in  Bool
+    val rstp        = in  Bool
+    val phy_tx_mode = in  Bool
     val usb_rst     = out Bool
     // Transciever Interface
-    val rxd         = in Bool
-    val rxdp        = in Bool
-    val rxdn        = in Bool
+    val rxd         = in  Bool
+    val rxdp        = in  Bool
+    val rxdn        = in  Bool
     val txdp        = out Bool
     val txdn        = out Bool
     val txoe        = out Bool
     // UTMI Interface
-    val DataOut_i   = in Bits(8 bits)
-    val TxValid_i   = in Bool
+    val DataOut_i   = in  Bits(8 bits)
+    val TxValid_i   = in  Bool
     val TxReady_o   = out Bool
     val DataIn_o    = out Bits(8 bits)
     val RxValid_o   = out Bool
@@ -196,8 +196,10 @@ case class Apb3UsbSerial(usbConfig : USBSerialConfig) extends Component {
   // Control signals to cores
   val ctrl = new Area {
     val txCork    = RegInit(False)  // (Serial) Temporarily suppress transmissions at the outgoing endpoint.
-    val softCon   = RegInit(False)  // (PHY) Software-controlled USB connection. A HIGH level applies 3.3 V to pin Vpu(3.3).
-    val phyTxMode = RegInit(False)  // (PHY) Selects the PHY Transmit Mode. Consult datasheet for details.
+    val softCon   = RegInit(True)  // (PHY) Software-controlled USB connection. A HIGH level applies 3.3 V to pin Vpu(3.3).
+    val phyTxMode = RegInit(True)  // (PHY) Selects the PHY Transmit Mode. Consult datasheet for details.
+    val speed     = RegInit(True)  // (TRNS) Change speed flag
+    io.usb.SPEED <> speed
   }
 
   // Clock domains
@@ -255,7 +257,7 @@ case class Apb3UsbSerial(usbConfig : USBSerialConfig) extends Component {
         io.usb.VM      <> usbPhy.io.rxdn
         io.usb.SUSPND  := False //<> utmiClockArea.usbSerial.io.SUSPEND
         io.usb.MODE    <> phyTxMode
-        io.usb.SPEED   := True // FS, since usb_phy only supports FS
+        //io.usb.SPEED   := True // FS, since usb_phy only supports FS
         io.usb.VPO     <> usbPhy.io.txdp
         io.usb.VMO     <> usbPhy.io.txdn
         io.usb.SOFTCON <> softCon
@@ -302,9 +304,10 @@ case class Apb3UsbSerial(usbConfig : USBSerialConfig) extends Component {
       4 -> txRdy)
 
     // 0x04 CTRL register
-    bus.driveAndRead(ctrl.txCork, 0x4, 0)
-    bus.driveAndRead(ctrl.softCon, 0x4, 1)
+    bus.driveAndRead(ctrl.txCork,    0x4, 0)
+    bus.driveAndRead(ctrl.softCon,   0x4, 1)
     bus.driveAndRead(ctrl.phyTxMode, 0x4, 2)
+    bus.driveAndRead(ctrl.speed,     0x4, 3)
 
     // 0x08 INT_STAT – interrupt status register
     // 0x0C INT_MASK – interrupt mask register
