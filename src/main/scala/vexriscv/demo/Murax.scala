@@ -13,9 +13,12 @@ import spinal.lib.misc.{InterruptCtrl, Prescaler, Timer}
 import spinal.lib.soc.pinsec.{PinsecTimerCtrl, PinsecTimerCtrlExternal}
 import vexriscv.plugin._
 import vexriscv.{VexRiscv, VexRiscvConfig, plugin}
+import vexriscv.ip.{DataCacheConfig, InstructionCacheConfig}
 import spinal.lib.com.spi.ddr._
 import spinal.lib.bus.simple._
+
 import scala.collection.mutable.ArrayBuffer
+
 
 /**
  * Created by PIC32F_USER on 28/07/2017.
@@ -75,7 +78,7 @@ object MuraxConfig{
         cmdForkPersistence = withXip, //Required by the Xip controller
         prediction = NONE,
         catchAccessFault = false,
-        compressedGen = false
+        compressedGen = true
       ),
       new DBusSimplePlugin(
         catchAddressMisaligned = false,
@@ -164,6 +167,8 @@ case class Murax(config : MuraxConfig) extends Component{
     //Peripherals IO
     val gpioA = master(TriStateArray(gpioWidth bits))
     val uart = master(Uart())
+    val can = master(CAN())
+    val usb = master(UsbPhy())
 
     val xip = ifGen(genXip)(master(SpiXdrMaster(xipConfig.ctrl.spi)))
   }
@@ -282,14 +287,38 @@ case class Murax(config : MuraxConfig) extends Component{
 
     val uartCtrl = Apb3UartCtrl(uartCtrlConfig)
     uartCtrl.io.uart <> io.uart
-    externalInterrupt setWhen(uartCtrl.io.interrupt)
     apbMapping += uartCtrl.io.apb  -> (0x10000, 4 kB)
 
     val timer = new MuraxApb3Timer()
     timerInterrupt setWhen(timer.io.interrupt)
     apbMapping += timer.io.apb     -> (0x20000, 4 kB)
 
-    val xip = ifGen(genXip)(new Area{
+    val can = new CTU_CAN_FD_v1_0_apb(
+      rx_buffer_size = 128,
+      sup_filtA = true,
+      sup_filtB = true,
+      sup_filtC = true
+    )
+    io.can <> can.io.can
+    can.io.timestamp := U"64'h10"
+    apbMapping += can.io.apb -> (0x30000, 4 KiB)
+
+    val usb = new Apb3UsbSerial(USBSerialConfig(
+      vendorID = B"x1357",
+      productID = B"x2468",
+      versionBCD = B"x0001",
+      versionStr = "0.1",
+      productStr = "Trinamic USB",
+      serialStr = "0123456789ABCDEF",
+      hsSupport = false,
+      selfPowered = true
+    ))
+    io.usb <> usb.io.usb
+    apbMapping += usb.io.apb -> (0x40000, 4 KiB)
+
+    externalInterrupt setWhen (uartCtrl.io.interrupt | can.io.irq | usb.io.interrupt)
+
+    val xip = ifGen(genXip)(new Area {
       val ctrl = Apb3SpiXdrMasterCtrl(xipConfig)
       ctrl.io.spi <> io.xip
       externalInterrupt setWhen(ctrl.io.interrupt)
@@ -486,27 +515,231 @@ object MuraxDhrystoneReady{
   }
 }
 
-object MuraxDhrystoneReadyMulDivStatic{
+object MuraxSmallTweaks {
   def main(args: Array[String]) {
     SpinalVerilog({
-      val config = MuraxConfig.fast.copy(onChipRamSize = 256 kB)
+      val config = MuraxConfig.fast.copy(onChipRamSize = 256 kB).copy(coreFrequency = 50 MHz)
       config.cpuPlugins += new MulPlugin
       config.cpuPlugins += new DivPlugin
       config.cpuPlugins.remove(config.cpuPlugins.indexWhere(_.isInstanceOf[BranchPlugin]))
-      config.cpuPlugins +=new BranchPlugin(
-        earlyBranch = false,
+      config.cpuPlugins += new BranchPlugin(
+        earlyBranch = true,
         catchAddressMisaligned = false
       )
+      config.cpuPlugins.remove(config.cpuPlugins.indexWhere(_.isInstanceOf[IBusSimplePlugin]))
       config.cpuPlugins += new IBusSimplePlugin(
         resetVector = 0x80000000l,
         cmdForkOnSecondStage = true,
         cmdForkPersistence = false,
         prediction = STATIC,
         catchAccessFault = false,
-        compressedGen = false
+        compressedGen = true
       )
       config.cpuPlugins.remove(config.cpuPlugins.indexWhere(_.isInstanceOf[LightShifterPlugin]))
-      config.cpuPlugins += new FullBarrelShifterPlugin
+      config.cpuPlugins += new FullBarrelShifterPlugin(earlyInjection = true)
+
+      config.cpuPlugins(config.cpuPlugins.indexWhere(_.isInstanceOf[DecoderSimplePlugin])) = new DecoderSimplePlugin(
+        catchIllegalInstruction = true
+      )
+      config.cpuPlugins(config.cpuPlugins.indexWhere(_.isInstanceOf[SrcPlugin])) = new SrcPlugin(
+        separatedAddSub = false,
+        executeInsertion = true
+      )
+      config.cpuPlugins(config.cpuPlugins.indexWhere(_.isInstanceOf[HazardSimplePlugin])) = new HazardSimplePlugin(
+        bypassExecute = true,
+        bypassMemory = true,
+        bypassWriteBack = true,
+        bypassWriteBackBuffer = true,
+        pessimisticUseSrc = false,
+        pessimisticWriteRegFile = false,
+        pessimisticAddressMatch = false
+      )
+      config.cpuPlugins(config.cpuPlugins.indexWhere(_.isInstanceOf[CsrPlugin])) = new CsrPlugin(CsrPluginConfig.smallest_trinamic(0x80000020l))
+
+      Murax(config)
+    })
+  }
+}
+
+object MuraxDynamicBranchPrediction {
+  def main(args: Array[String]) {
+    SpinalVerilog({
+      val config = MuraxConfig.fast.copy(onChipRamSize = 256 kB).copy(coreFrequency = 50 MHz).copy(hardwareBreakpointCount = 2)
+      config.cpuPlugins += new MulPlugin
+      config.cpuPlugins += new DivPlugin
+      config.cpuPlugins.remove(config.cpuPlugins.indexWhere(_.isInstanceOf[BranchPlugin]))
+      config.cpuPlugins += new BranchPlugin(
+        earlyBranch = true,
+        catchAddressMisaligned = false
+      )
+      config.cpuPlugins.remove(config.cpuPlugins.indexWhere(_.isInstanceOf[IBusSimplePlugin]))
+      config.cpuPlugins += new IBusSimplePlugin(
+        resetVector = 0x80000000l,
+        cmdForkOnSecondStage = true,
+        cmdForkPersistence = false,
+        prediction = DYNAMIC,
+        catchAccessFault = false,
+        compressedGen = true
+      )
+      config.cpuPlugins.remove(config.cpuPlugins.indexWhere(_.isInstanceOf[LightShifterPlugin]))
+      config.cpuPlugins += new FullBarrelShifterPlugin(earlyInjection = true)
+
+      config.cpuPlugins(config.cpuPlugins.indexWhere(_.isInstanceOf[DecoderSimplePlugin])) = new DecoderSimplePlugin(
+        catchIllegalInstruction = true
+      )
+      config.cpuPlugins(config.cpuPlugins.indexWhere(_.isInstanceOf[SrcPlugin])) = new SrcPlugin(
+        separatedAddSub = false,
+        executeInsertion = true
+      )
+      config.cpuPlugins(config.cpuPlugins.indexWhere(_.isInstanceOf[HazardSimplePlugin])) = new HazardSimplePlugin(
+        bypassExecute = true,
+        bypassMemory = true,
+        bypassWriteBack = true,
+        bypassWriteBackBuffer = true,
+        pessimisticUseSrc = false,
+        pessimisticWriteRegFile = false,
+        pessimisticAddressMatch = false
+      )
+      config.cpuPlugins(config.cpuPlugins.indexWhere(_.isInstanceOf[CsrPlugin])) = new CsrPlugin(CsrPluginConfig.smallest_trinamic(0x80000020l))
+
+      Murax(config)
+    })
+  }
+}
+
+object MuraxHWBreakpoints {
+  def main(args: Array[String]) {
+    SpinalVerilog({
+      val config = MuraxConfig.fast.copy(onChipRamSize = 256 kB).copy(coreFrequency = 50 MHz).copy(hardwareBreakpointCount = 2)
+      config.cpuPlugins += new MulPlugin
+      config.cpuPlugins += new DivPlugin
+      config.cpuPlugins.remove(config.cpuPlugins.indexWhere(_.isInstanceOf[BranchPlugin]))
+      config.cpuPlugins += new BranchPlugin(
+        earlyBranch = true,
+        catchAddressMisaligned = false
+      )
+      config.cpuPlugins.remove(config.cpuPlugins.indexWhere(_.isInstanceOf[IBusSimplePlugin]))
+      config.cpuPlugins += new IBusSimplePlugin(
+        resetVector = 0x80000000l,
+        cmdForkOnSecondStage = true,
+        cmdForkPersistence = false,
+        prediction = STATIC,
+        catchAccessFault = false,
+        compressedGen = true
+      )
+      config.cpuPlugins.remove(config.cpuPlugins.indexWhere(_.isInstanceOf[LightShifterPlugin]))
+      config.cpuPlugins += new FullBarrelShifterPlugin(earlyInjection = true)
+
+      config.cpuPlugins(config.cpuPlugins.indexWhere(_.isInstanceOf[DecoderSimplePlugin])) = new DecoderSimplePlugin(
+        catchIllegalInstruction = true
+      )
+      config.cpuPlugins(config.cpuPlugins.indexWhere(_.isInstanceOf[SrcPlugin])) = new SrcPlugin(
+        separatedAddSub = false,
+        executeInsertion = true
+      )
+      config.cpuPlugins(config.cpuPlugins.indexWhere(_.isInstanceOf[HazardSimplePlugin])) = new HazardSimplePlugin(
+        bypassExecute = true,
+        bypassMemory = true,
+        bypassWriteBack = true,
+        bypassWriteBackBuffer = true,
+        pessimisticUseSrc = false,
+        pessimisticWriteRegFile = false,
+        pessimisticAddressMatch = false
+      )
+      config.cpuPlugins(config.cpuPlugins.indexWhere(_.isInstanceOf[CsrPlugin])) = new CsrPlugin(CsrPluginConfig.smallest_trinamic(0x80000020l))
+
+      Murax(config)
+    })
+  }
+}
+
+object MuraxTrinamic4 {
+  def main(args: Array[String]) {
+    SpinalVerilog({
+      val config = MuraxConfig.fast.copy(onChipRamSize = 64 kB).copy(coreFrequency = 50 MHz).copy(hardwareBreakpointCount = 2)
+      config.cpuPlugins += new MulPlugin
+      config.cpuPlugins += new DivPlugin
+      config.cpuPlugins.remove(config.cpuPlugins.indexWhere(_.isInstanceOf[BranchPlugin]))
+      config.cpuPlugins += new BranchPlugin(
+        earlyBranch = true,
+        catchAddressMisaligned = false
+      )
+      config.cpuPlugins.remove(config.cpuPlugins.indexWhere(_.isInstanceOf[IBusSimplePlugin]))
+      config.cpuPlugins += new IBusSimplePlugin(
+        resetVector = 0x80000000l,
+        cmdForkOnSecondStage = true,
+        cmdForkPersistence = false,
+        prediction = NONE,
+        catchAccessFault = false,
+        compressedGen = true
+      )
+      config.cpuPlugins.remove(config.cpuPlugins.indexWhere(_.isInstanceOf[LightShifterPlugin]))
+      config.cpuPlugins += new FullBarrelShifterPlugin(earlyInjection = true)
+
+      config.cpuPlugins(config.cpuPlugins.indexWhere(_.isInstanceOf[DecoderSimplePlugin])) = new DecoderSimplePlugin(
+        catchIllegalInstruction = true
+      )
+      config.cpuPlugins(config.cpuPlugins.indexWhere(_.isInstanceOf[SrcPlugin])) = new SrcPlugin(
+        separatedAddSub = false,
+        executeInsertion = true
+      )
+      config.cpuPlugins(config.cpuPlugins.indexWhere(_.isInstanceOf[HazardSimplePlugin])) = new HazardSimplePlugin(
+        bypassExecute = true,
+        bypassMemory = true,
+        bypassWriteBack = true,
+        bypassWriteBackBuffer = true,
+        pessimisticUseSrc = false,
+        pessimisticWriteRegFile = false,
+        pessimisticAddressMatch = false
+      )
+      config.cpuPlugins(config.cpuPlugins.indexWhere(_.isInstanceOf[CsrPlugin])) = new CsrPlugin(CsrPluginConfig.smallest_trinamic(0x00000020l))
+
+      Murax(config)
+    })
+  }
+}
+
+object MuraxTrinamic6 {
+  def main(args: Array[String]) {
+    SpinalVhdl({
+      val config = MuraxConfig.fast.copy(onChipRamSize = 32 kB).copy(coreFrequency = 50 MHz)
+      config.cpuPlugins += new MulPlugin
+      config.cpuPlugins += new DivPlugin
+      config.cpuPlugins.remove(config.cpuPlugins.indexWhere(_.isInstanceOf[BranchPlugin]))
+      config.cpuPlugins += new BranchPlugin(
+        earlyBranch = true,
+        catchAddressMisaligned = false
+      )
+      config.cpuPlugins.remove(config.cpuPlugins.indexWhere(_.isInstanceOf[IBusSimplePlugin]))
+      config.cpuPlugins += new IBusSimplePlugin(
+        resetVector = 0x80000000l,
+        cmdForkOnSecondStage = false,
+        cmdForkPersistence = false,
+        prediction = STATIC,
+        catchAccessFault = false,
+        compressedGen = true
+      )
+      config.cpuPlugins.remove(config.cpuPlugins.indexWhere(_.isInstanceOf[LightShifterPlugin]))
+      config.cpuPlugins += new FullBarrelShifterPlugin(earlyInjection = true)
+
+      config.cpuPlugins(config.cpuPlugins.indexWhere(_.isInstanceOf[DecoderSimplePlugin])) = new DecoderSimplePlugin(
+        catchIllegalInstruction = true
+      )
+      config.cpuPlugins(config.cpuPlugins.indexWhere(_.isInstanceOf[SrcPlugin])) = new SrcPlugin(
+        separatedAddSub = false,
+        executeInsertion = true
+      )
+      config.cpuPlugins(config.cpuPlugins.indexWhere(_.isInstanceOf[HazardSimplePlugin])) = new HazardSimplePlugin(
+        bypassExecute = true,
+        bypassMemory = true,
+        bypassWriteBack = true,
+        bypassWriteBackBuffer = true,
+        pessimisticUseSrc = false,
+        pessimisticWriteRegFile = false,
+        pessimisticAddressMatch = false
+      )
+      config.cpuPlugins(config.cpuPlugins.indexWhere(_.isInstanceOf[CsrPlugin])) = new CsrPlugin(CsrPluginConfig.smallest_trinamic(0x80000010l))
+
       Murax(config)
     })
   }

@@ -153,6 +153,939 @@ object BrieyConfig{
     )
     config
   }
+
+  def trinamic1 = {
+    val config = BrieyConfig(
+      axiFrequency = 50 MHz,
+      onChipRamSize  = 64 kB,
+      sdramLayout = IS42x320D.layout,
+      sdramTimings = IS42x320D.timingGrade7,
+      uartCtrlConfig = UartCtrlMemoryMappedConfig(
+        uartCtrlConfig = UartCtrlGenerics(
+          dataWidthMax      = 8,
+          clockDividerWidth = 20,
+          preSamplingSize   = 1,
+          samplingSize      = 5,
+          postSamplingSize  = 2
+        ),
+        txFifoDepth = 16,
+        rxFifoDepth = 16
+      ),
+      cpuPlugins = ArrayBuffer(
+        new PcManagerSimplePlugin(0x80000000l, false),
+        new IBusCachedPlugin(
+          resetVector = 0x80000000l,
+          prediction = STATIC,
+          //compressedGen = true, // https://github.com/SpinalHDL/VexRiscv/issues/93
+          config = InstructionCacheConfig(
+            cacheSize = 4096,
+            bytePerLine =32,
+            wayCount = 1,
+            addressWidth = 32,
+            cpuDataWidth = 32,
+            memDataWidth = 32,
+            catchIllegalAccess = true,
+            catchAccessFault = true,
+            asyncTagMemory = false,
+            twoCycleRam = true,
+            twoCycleCache = true
+          )
+        ),
+        new DBusCachedPlugin(
+          config = new DataCacheConfig(
+            cacheSize         = 4096,
+            bytePerLine       = 32,
+            wayCount          = 1,
+            addressWidth      = 32,
+            cpuDataWidth      = 32,
+            memDataWidth      = 32,
+            catchAccessError  = true,
+            catchIllegal      = true,
+            catchUnaligned    = true
+          ),
+          memoryTranslatorPortConfig = null
+        ),
+        new StaticMemoryTranslatorPlugin(
+          ioRange      = _(31 downto 28) === 0xF
+        ),
+        new DecoderSimplePlugin(
+          catchIllegalInstruction = true
+        ),
+        new RegFilePlugin(
+          regFileReadyKind = plugin.SYNC,
+          zeroBoot = false
+        ),
+        new IntAluPlugin,
+        new SrcPlugin(
+          separatedAddSub = false,
+          executeInsertion = true
+        ),
+        new FullBarrelShifterPlugin,
+        new MulPlugin,
+        new DivPlugin,
+        new HazardSimplePlugin(
+          bypassExecute           = true,
+          bypassMemory            = true,
+          bypassWriteBack         = true,
+          bypassWriteBackBuffer   = true,
+          pessimisticUseSrc       = false,
+          pessimisticWriteRegFile = false,
+          pessimisticAddressMatch = false
+        ),
+        new BranchPlugin(
+          earlyBranch = false,
+          catchAddressMisaligned = true
+        ),
+        new CsrPlugin(
+          config = CsrPluginConfig(
+            catchIllegalAccess = false,
+            mvendorid      = null,
+            marchid        = null,
+            mimpid         = null,
+            mhartid        = null,
+            misaExtensionsInit = 66,
+            misaAccess     = CsrAccess.NONE,
+            mtvecAccess    = CsrAccess.NONE,
+            mtvecInit      = 0x80000020l,
+            mepcAccess     = CsrAccess.READ_WRITE,
+            mscratchGen    = false,
+            mcauseAccess   = CsrAccess.READ_ONLY,
+            mbadaddrAccess = CsrAccess.READ_ONLY,
+            mcycleAccess   = CsrAccess.READ_ONLY,
+            minstretAccess = CsrAccess.NONE,
+            ecallGen       = false,
+            wfiGenAsWait         = false,
+            ucycleAccess   = CsrAccess.NONE
+          )
+        ),
+        new YamlPlugin("cpu0.yaml")
+      )
+    )
+    config
+  }
+
+  def trinamic2 = {
+    val config = BrieyConfig(
+      axiFrequency = 50 MHz,
+      onChipRamSize  = 64 kB,
+      sdramLayout = IS42x320D.layout,
+      sdramTimings = IS42x320D.timingGrade7,
+      uartCtrlConfig = UartCtrlMemoryMappedConfig(
+        uartCtrlConfig = UartCtrlGenerics(
+          dataWidthMax      = 8,
+          clockDividerWidth = 20,
+          preSamplingSize   = 1,
+          samplingSize      = 5,
+          postSamplingSize  = 2
+        ),
+        txFifoDepth = 16,
+        rxFifoDepth = 16
+      ),
+      cpuPlugins = ArrayBuffer(
+        new PcManagerSimplePlugin(0x80000000l, false),
+        new IBusCachedPlugin(
+          resetVector = 0x80000000l,
+          prediction = STATIC,
+          //compressedGen = true, // https://github.com/SpinalHDL/VexRiscv/issues/93
+          config = InstructionCacheConfig(
+            cacheSize = 128,
+            bytePerLine =32,
+            wayCount = 1,
+            addressWidth = 32,
+            cpuDataWidth = 32,
+            memDataWidth = 32,
+            catchIllegalAccess = true,
+            catchAccessFault = true,
+            asyncTagMemory = false,
+            twoCycleRam = true,
+            twoCycleCache = true
+          )
+        ),
+        new DBusCachedPlugin(
+          config = new DataCacheConfig(
+            cacheSize         = 128,
+            bytePerLine       = 32,
+            wayCount          = 1,
+            addressWidth      = 32,
+            cpuDataWidth      = 32,
+            memDataWidth      = 32,
+            catchAccessError  = true,
+            catchIllegal      = true,
+            catchUnaligned    = true
+          ),
+          memoryTranslatorPortConfig = null
+        ),
+        new StaticMemoryTranslatorPlugin(
+          ioRange      = _(31 downto 28) === 0xF
+        ),
+        new DecoderSimplePlugin(
+          catchIllegalInstruction = true
+        ),
+        new RegFilePlugin(
+          regFileReadyKind = plugin.SYNC,
+          zeroBoot = false
+        ),
+        new IntAluPlugin,
+        new SrcPlugin(
+          separatedAddSub = false,
+          executeInsertion = true
+        ),
+        new FullBarrelShifterPlugin,
+        new MulPlugin,
+        new DivPlugin,
+        new HazardSimplePlugin(
+          bypassExecute           = true,
+          bypassMemory            = true,
+          bypassWriteBack         = true,
+          bypassWriteBackBuffer   = true,
+          pessimisticUseSrc       = false,
+          pessimisticWriteRegFile = false,
+          pessimisticAddressMatch = false
+        ),
+        new BranchPlugin(
+          earlyBranch = false,
+          catchAddressMisaligned = true
+        ),
+        new CsrPlugin(
+          config = CsrPluginConfig(
+            catchIllegalAccess = false,
+            mvendorid      = null,
+            marchid        = null,
+            mimpid         = null,
+            mhartid        = null,
+            misaExtensionsInit = 66,
+            misaAccess     = CsrAccess.NONE,
+            mtvecAccess    = CsrAccess.NONE,
+            mtvecInit      = 0x80000020l,
+            mepcAccess     = CsrAccess.READ_WRITE,
+            mscratchGen    = false,
+            mcauseAccess   = CsrAccess.READ_ONLY,
+            mbadaddrAccess = CsrAccess.READ_ONLY,
+            mcycleAccess   = CsrAccess.READ_ONLY,
+            minstretAccess = CsrAccess.NONE,
+            ecallGen       = false,
+            wfiGenAsWait         = false,
+            ucycleAccess   = CsrAccess.NONE
+          )
+        ),
+        new YamlPlugin("cpu0.yaml")
+      )
+    )
+    config
+  }
+
+  def trinamic3 = {
+    val config = BrieyConfig(
+      axiFrequency = 50 MHz,
+      onChipRamSize  = 64 kB,
+      sdramLayout = IS42x320D.layout,
+      sdramTimings = IS42x320D.timingGrade7,
+      uartCtrlConfig = UartCtrlMemoryMappedConfig(
+        uartCtrlConfig = UartCtrlGenerics(
+          dataWidthMax      = 8,
+          clockDividerWidth = 20,
+          preSamplingSize   = 1,
+          samplingSize      = 5,
+          postSamplingSize  = 2
+        ),
+        txFifoDepth = 16,
+        rxFifoDepth = 16
+      ),
+      cpuPlugins = ArrayBuffer(
+        new IBusCachedPlugin(
+          resetVector = 0x80000000l,
+          prediction = STATIC,
+          //compressedGen = true, // https://github.com/SpinalHDL/VexRiscv/issues/93
+          config = InstructionCacheConfig(
+            cacheSize = 256,
+            bytePerLine = 32,
+            wayCount = 1,
+            addressWidth = 32,
+            cpuDataWidth = 32,
+            memDataWidth = 32,
+            catchIllegalAccess = true,
+            catchAccessFault = true,
+            asyncTagMemory = false,
+            twoCycleRam = true,
+            twoCycleCache = true
+          )
+        ),
+        new DBusSimplePlugin(
+          catchAddressMisaligned = false,
+          catchAccessFault = false,
+          earlyInjection = false
+        ),
+        new StaticMemoryTranslatorPlugin(
+          ioRange      = _(31 downto 28) === 0xF
+        ),
+        new DecoderSimplePlugin(
+          catchIllegalInstruction = true
+        ),
+        new RegFilePlugin(
+          regFileReadyKind = plugin.SYNC,
+          zeroBoot = false
+        ),
+        new IntAluPlugin,
+        new SrcPlugin(
+          separatedAddSub = false,
+          executeInsertion = true
+        ),
+        new FullBarrelShifterPlugin,
+        new MulPlugin,
+        new DivPlugin,
+        new HazardSimplePlugin(
+          bypassExecute           = true,
+          bypassMemory            = true,
+          bypassWriteBack         = true,
+          bypassWriteBackBuffer   = true,
+          pessimisticUseSrc       = false,
+          pessimisticWriteRegFile = false,
+          pessimisticAddressMatch = false
+        ),
+        new BranchPlugin(
+          earlyBranch = false,
+          catchAddressMisaligned = true
+        ),
+        new CsrPlugin(
+          config = CsrPluginConfig(
+            catchIllegalAccess = false,
+            mvendorid      = null,
+            marchid        = null,
+            mimpid         = null,
+            mhartid        = null,
+            misaExtensionsInit = 66,
+            misaAccess     = CsrAccess.NONE,
+            mtvecAccess    = CsrAccess.NONE,
+            mtvecInit      = 0x80000020l,
+            mepcAccess     = CsrAccess.READ_WRITE,
+            mscratchGen    = false,
+            mcauseAccess   = CsrAccess.READ_ONLY,
+            mbadaddrAccess = CsrAccess.READ_ONLY,
+            mcycleAccess   = CsrAccess.READ_ONLY,
+            minstretAccess = CsrAccess.NONE,
+            ecallGen       = false,
+            wfiGenAsWait         = false,
+            ucycleAccess   = CsrAccess.NONE
+          )
+        ),
+        new YamlPlugin("cpu0.yaml")
+      )
+    )
+    config
+  }
+
+  def trinamic4 = {
+    val config = BrieyConfig(
+      axiFrequency = 50 MHz,
+      onChipRamSize  = 64 kB,
+      sdramLayout = IS42x320D.layout,
+      sdramTimings = IS42x320D.timingGrade7,
+      uartCtrlConfig = UartCtrlMemoryMappedConfig(
+        uartCtrlConfig = UartCtrlGenerics(
+          dataWidthMax      = 8,
+          clockDividerWidth = 20,
+          preSamplingSize   = 1,
+          samplingSize      = 5,
+          postSamplingSize  = 2
+        ),
+        txFifoDepth = 16,
+        rxFifoDepth = 16
+      ),
+      cpuPlugins = ArrayBuffer(
+        new IBusCachedPlugin(
+          resetVector = 0x80000000l,
+          prediction = NONE,
+          //compressedGen = true, // https://github.com/SpinalHDL/VexRiscv/issues/93
+          config = InstructionCacheConfig(
+            cacheSize = 128,
+            bytePerLine = 32,
+            wayCount = 1,
+            addressWidth = 32,
+            cpuDataWidth = 32,
+            memDataWidth = 32,
+            catchIllegalAccess = true,
+            catchAccessFault = true,
+            asyncTagMemory = false,
+            twoCycleRam = true,
+            twoCycleCache = true
+          )
+        ),
+        new DBusSimplePlugin(
+          catchAddressMisaligned = false,
+          catchAccessFault = false,
+          earlyInjection = false
+        ),
+        new StaticMemoryTranslatorPlugin(
+          ioRange      = _(31 downto 28) === 0xF
+        ),
+        new DecoderSimplePlugin(
+          catchIllegalInstruction = true
+        ),
+        new RegFilePlugin(
+          regFileReadyKind = plugin.SYNC,
+          zeroBoot = false
+        ),
+        new IntAluPlugin,
+        new SrcPlugin(
+          separatedAddSub = false,
+          executeInsertion = true
+        ),
+        new FullBarrelShifterPlugin,
+        new MulPlugin,
+        new DivPlugin,
+        new HazardSimplePlugin(
+          bypassExecute           = true,
+          bypassMemory            = true,
+          bypassWriteBack         = true,
+          bypassWriteBackBuffer   = true,
+          pessimisticUseSrc       = false,
+          pessimisticWriteRegFile = false,
+          pessimisticAddressMatch = false
+        ),
+        new BranchPlugin(
+          earlyBranch = false,
+          catchAddressMisaligned = true
+        ),
+        new CsrPlugin(
+          config = CsrPluginConfig(
+            catchIllegalAccess = false,
+            mvendorid      = null,
+            marchid        = null,
+            mimpid         = null,
+            mhartid        = null,
+            misaExtensionsInit = 66,
+            misaAccess     = CsrAccess.NONE,
+            mtvecAccess    = CsrAccess.NONE,
+            mtvecInit      = 0x80000020l,
+            mepcAccess     = CsrAccess.READ_WRITE,
+            mscratchGen    = false,
+            mcauseAccess   = CsrAccess.READ_ONLY,
+            mbadaddrAccess = CsrAccess.READ_ONLY,
+            mcycleAccess   = CsrAccess.READ_ONLY,
+            minstretAccess = CsrAccess.NONE,
+            ecallGen       = false,
+            wfiGenAsWait         = false,
+            ucycleAccess   = CsrAccess.NONE
+          )
+        ),
+        new YamlPlugin("cpu0.yaml")
+      )
+    )
+    config
+  }
+
+  def trinamic5 = {
+    val config = BrieyConfig(
+      axiFrequency = 50 MHz,
+      onChipRamSize  = 64 kB,
+      sdramLayout = IS42x320D.layout,
+      sdramTimings = IS42x320D.timingGrade7,
+      uartCtrlConfig = UartCtrlMemoryMappedConfig(
+        uartCtrlConfig = UartCtrlGenerics(
+          dataWidthMax      = 8,
+          clockDividerWidth = 20,
+          preSamplingSize   = 1,
+          samplingSize      = 5,
+          postSamplingSize  = 2
+        ),
+        txFifoDepth = 16,
+        rxFifoDepth = 16
+      ),
+      cpuPlugins = ArrayBuffer(
+        new PcManagerSimplePlugin(
+          resetVector = 0x80000000l,
+          relaxedPcCalculation = false
+        ),
+        new IBusCachedPlugin(
+          prediction = DYNAMIC_TARGET,
+          historyRamSizeLog2 = 8,
+          config = InstructionCacheConfig(
+            cacheSize = 4096*4,
+            bytePerLine =32,
+            wayCount = 1,
+            addressWidth = 32,
+            cpuDataWidth = 32,
+            memDataWidth = 32,
+            catchIllegalAccess = true,
+            catchAccessFault = true,
+            asyncTagMemory = false,
+            twoCycleRam = true,
+            twoCycleCache = true
+          )
+        ),
+        new DBusCachedPlugin(
+          config = new DataCacheConfig(
+            cacheSize         = 4096*4,
+            bytePerLine       = 32,
+            wayCount          = 1,
+            addressWidth      = 32,
+            cpuDataWidth      = 32,
+            memDataWidth      = 32,
+            catchAccessError  = true,
+            catchIllegal      = true,
+            catchUnaligned    = true
+          )
+        ),
+        new StaticMemoryTranslatorPlugin(
+          ioRange      = _(31 downto 28) === 0xF
+        ),
+        new DecoderSimplePlugin(
+          catchIllegalInstruction = true
+        ),
+        new RegFilePlugin(
+          regFileReadyKind = plugin.SYNC,
+          zeroBoot = false
+        ),
+        new IntAluPlugin,
+        new SrcPlugin(
+          separatedAddSub = false,
+          executeInsertion = true
+        ),
+        new FullBarrelShifterPlugin(earlyInjection = true),
+        new HazardSimplePlugin(
+          bypassExecute           = true,
+          bypassMemory            = true,
+          bypassWriteBack         = true,
+          bypassWriteBackBuffer   = true,
+          pessimisticUseSrc       = false,
+          pessimisticWriteRegFile = false,
+          pessimisticAddressMatch = false
+        ),
+        new MulPlugin,
+        new DivPlugin,
+        new CsrPlugin(CsrPluginConfig.small_mcount),
+        new BranchPlugin(
+          earlyBranch = true,
+          catchAddressMisaligned = true
+        ),
+        new YamlPlugin("cpu0.yaml")
+      )
+    )
+    config
+  }
+
+  def trinamic6 = {
+    val config = BrieyConfig(
+      axiFrequency = 50 MHz,
+      onChipRamSize  = 64 kB,
+      sdramLayout = IS42x320D.layout,
+      sdramTimings = IS42x320D.timingGrade7,
+      uartCtrlConfig = UartCtrlMemoryMappedConfig(
+        uartCtrlConfig = UartCtrlGenerics(
+          dataWidthMax      = 8,
+          clockDividerWidth = 20,
+          preSamplingSize   = 1,
+          samplingSize      = 5,
+          postSamplingSize  = 2
+        ),
+        txFifoDepth = 16,
+        rxFifoDepth = 16
+      ),
+      cpuPlugins = ArrayBuffer(
+        new PcManagerSimplePlugin(
+          resetVector = 0x80000000l,
+          relaxedPcCalculation = false
+        ),
+        new IBusCachedPlugin(
+          prediction = DYNAMIC_TARGET,
+          historyRamSizeLog2 = 8,
+          config = InstructionCacheConfig(
+            cacheSize = 4096*4,
+            bytePerLine =32,
+            wayCount = 1,
+            addressWidth = 32,
+            cpuDataWidth = 32,
+            memDataWidth = 32,
+            catchIllegalAccess = true,
+            catchAccessFault = true,
+            asyncTagMemory = false,
+            twoCycleRam = true,
+            twoCycleCache = true
+          )
+        ),
+        new DBusSimplePlugin(
+          catchAddressMisaligned = true,
+          catchAccessFault = true,
+          earlyInjection = true
+        ),
+        new StaticMemoryTranslatorPlugin(
+          ioRange      = _(31 downto 28) === 0xF
+        ),
+        new DecoderSimplePlugin(
+          catchIllegalInstruction = true
+        ),
+        new RegFilePlugin(
+          regFileReadyKind = plugin.SYNC,
+          zeroBoot = false
+        ),
+        new IntAluPlugin,
+        new SrcPlugin(
+          separatedAddSub = false,
+          executeInsertion = true
+        ),
+        new FullBarrelShifterPlugin(earlyInjection = true),
+        new HazardSimplePlugin(
+          bypassExecute           = true,
+          bypassMemory            = true,
+          bypassWriteBack         = true,
+          bypassWriteBackBuffer   = true,
+          pessimisticUseSrc       = false,
+          pessimisticWriteRegFile = false,
+          pessimisticAddressMatch = false
+        ),
+        new MulPlugin,
+        new DivPlugin,
+        new CsrPlugin(CsrPluginConfig.small_mcount),
+        new BranchPlugin(
+          earlyBranch = true,
+          catchAddressMisaligned = true
+        ),
+        new YamlPlugin("cpu0.yaml")
+      )
+    )
+    config
+  }
+
+  def trinamic7 = {
+    val config = BrieyConfig(
+      axiFrequency = 50 MHz,
+      onChipRamSize  = 64 kB,
+      sdramLayout = IS42x320D.layout,
+      sdramTimings = IS42x320D.timingGrade7,
+      uartCtrlConfig = UartCtrlMemoryMappedConfig(
+        uartCtrlConfig = UartCtrlGenerics(
+          dataWidthMax      = 8,
+          clockDividerWidth = 20,
+          preSamplingSize   = 1,
+          samplingSize      = 5,
+          postSamplingSize  = 2
+        ),
+        txFifoDepth = 16,
+        rxFifoDepth = 16
+      ),
+      cpuPlugins = ArrayBuffer(
+        new PcManagerSimplePlugin(
+          resetVector = 0x80000000l,
+          relaxedPcCalculation = false
+        ),
+        new IBusCachedPlugin(
+          prediction = STATIC,
+          historyRamSizeLog2 = 8,
+          config = InstructionCacheConfig(
+            cacheSize = 4096*4,
+            bytePerLine =32,
+            wayCount = 1,
+            addressWidth = 32,
+            cpuDataWidth = 32,
+            memDataWidth = 32,
+            catchIllegalAccess = true,
+            catchAccessFault = true,
+            asyncTagMemory = false,
+            twoCycleRam = true,
+            twoCycleCache = true
+          )
+        ),
+        new DBusCachedPlugin(
+          config = new DataCacheConfig(
+            cacheSize         = 4096*4,
+            bytePerLine       = 32,
+            wayCount          = 1,
+            addressWidth      = 32,
+            cpuDataWidth      = 32,
+            memDataWidth      = 32,
+            catchAccessError  = true,
+            catchIllegal      = true,
+            catchUnaligned    = true
+          )
+        ),
+        new StaticMemoryTranslatorPlugin(
+          ioRange      = _(31 downto 28) === 0xF
+        ),
+        new DecoderSimplePlugin(
+          catchIllegalInstruction = true
+        ),
+        new RegFilePlugin(
+          regFileReadyKind = plugin.SYNC,
+          zeroBoot = false
+        ),
+        new IntAluPlugin,
+        new SrcPlugin(
+          separatedAddSub = false,
+          executeInsertion = true
+        ),
+        new FullBarrelShifterPlugin(earlyInjection = true),
+        new HazardSimplePlugin(
+          bypassExecute           = true,
+          bypassMemory            = true,
+          bypassWriteBack         = true,
+          bypassWriteBackBuffer   = true,
+          pessimisticUseSrc       = false,
+          pessimisticWriteRegFile = false,
+          pessimisticAddressMatch = false
+        ),
+        new MulPlugin,
+        new DivPlugin,
+        new CsrPlugin(CsrPluginConfig.small_mcount),
+        new BranchPlugin(
+          earlyBranch = true,
+          catchAddressMisaligned = true
+        ),
+        new YamlPlugin("cpu0.yaml")
+      )
+    )
+    config
+  }
+
+  def trinamic8 = {
+    val config = BrieyConfig(
+      axiFrequency = 50 MHz,
+      onChipRamSize  = 64 kB,
+      sdramLayout = IS42x320D.layout,
+      sdramTimings = IS42x320D.timingGrade7,
+      uartCtrlConfig = UartCtrlMemoryMappedConfig(
+        uartCtrlConfig = UartCtrlGenerics(
+          dataWidthMax      = 8,
+          clockDividerWidth = 20,
+          preSamplingSize   = 1,
+          samplingSize      = 5,
+          postSamplingSize  = 2
+        ),
+        txFifoDepth = 16,
+        rxFifoDepth = 16
+      ),
+      cpuPlugins = ArrayBuffer(
+        new PcManagerSimplePlugin(
+          resetVector = 0x80000000l,
+          relaxedPcCalculation = false
+        ),
+        new IBusCachedPlugin(
+          prediction = STATIC,
+          historyRamSizeLog2 = 8,
+          config = InstructionCacheConfig(
+            cacheSize = 1024,
+            bytePerLine = 32,
+            wayCount = 1,
+            addressWidth = 32,
+            cpuDataWidth = 32,
+            memDataWidth = 32,
+            catchIllegalAccess = true,
+            catchAccessFault = true,
+            asyncTagMemory = false,
+            twoCycleRam = true,
+            twoCycleCache = true
+          )
+        ),
+        new DBusCachedPlugin(
+          config = new DataCacheConfig(
+            cacheSize         = 1024,
+            bytePerLine       = 32,
+            wayCount          = 1,
+            addressWidth      = 32,
+            cpuDataWidth      = 32,
+            memDataWidth      = 32,
+            catchAccessError  = true,
+            catchIllegal      = true,
+            catchUnaligned    = true
+          )
+        ),
+        new StaticMemoryTranslatorPlugin(
+          ioRange      = _(31 downto 28) === 0xF
+        ),
+        new DecoderSimplePlugin(
+          catchIllegalInstruction = true
+        ),
+        new RegFilePlugin(
+          regFileReadyKind = plugin.SYNC,
+          zeroBoot = false
+        ),
+        new IntAluPlugin,
+        new SrcPlugin(
+          separatedAddSub = false,
+          executeInsertion = true
+        ),
+        new FullBarrelShifterPlugin(earlyInjection = true),
+        new HazardSimplePlugin(
+          bypassExecute           = true,
+          bypassMemory            = true,
+          bypassWriteBack         = true,
+          bypassWriteBackBuffer   = true,
+          pessimisticUseSrc       = false,
+          pessimisticWriteRegFile = false,
+          pessimisticAddressMatch = false
+        ),
+        new MulPlugin,
+        new DivPlugin,
+        new CsrPlugin(CsrPluginConfig.small_mcount),
+        new BranchPlugin(
+          earlyBranch = true,
+          catchAddressMisaligned = true
+        ),
+        new YamlPlugin("cpu0.yaml")
+      )
+    )
+    config
+  }
+
+  def trinamic9 = {
+    val config = BrieyConfig(
+      axiFrequency = 50 MHz,
+      onChipRamSize  = 64 kB,
+      sdramLayout = IS42x320D.layout,
+      sdramTimings = IS42x320D.timingGrade7,
+      uartCtrlConfig = UartCtrlMemoryMappedConfig(
+        uartCtrlConfig = UartCtrlGenerics(
+          dataWidthMax      = 8,
+          clockDividerWidth = 20,
+          preSamplingSize   = 1,
+          samplingSize      = 5,
+          postSamplingSize  = 2
+        ),
+        txFifoDepth = 16,
+        rxFifoDepth = 16
+      ),
+      cpuPlugins = ArrayBuffer(
+        new PcManagerSimplePlugin(
+          resetVector = 0x80000000l,
+          relaxedPcCalculation = false
+        ),
+        new IBusSimplePlugin(
+          resetVector = 0x80000000l,
+          cmdForkOnSecondStage = false,
+          cmdForkPersistence = true,
+          prediction = NONE,
+          catchAccessFault = false,
+          compressedGen = true
+        ),
+        new DBusSimplePlugin(
+          catchAddressMisaligned = false,
+          catchAccessFault = false,
+          earlyInjection = false
+        ),
+        new DecoderSimplePlugin(
+          catchIllegalInstruction = true
+        ),
+        new RegFilePlugin(
+          regFileReadyKind = plugin.SYNC,
+          zeroBoot = false
+        ),
+        new IntAluPlugin,
+        new SrcPlugin(
+          separatedAddSub = false,
+          executeInsertion = true
+        ),
+        new FullBarrelShifterPlugin(earlyInjection = true),
+        new HazardSimplePlugin(
+          bypassExecute           = true,
+          bypassMemory            = true,
+          bypassWriteBack         = true,
+          bypassWriteBackBuffer   = true,
+          pessimisticUseSrc       = false,
+          pessimisticWriteRegFile = false,
+          pessimisticAddressMatch = false
+        ),
+        new MulPlugin,
+        new DivPlugin,
+        new CsrPlugin(CsrPluginConfig.small_mcount),
+        new BranchPlugin(
+          earlyBranch = true,
+          catchAddressMisaligned = true
+        ),
+        new YamlPlugin("cpu0.yaml")
+      )
+    )
+    config
+  }
+
+  def trinamic10 = {
+    val config = BrieyConfig(
+      axiFrequency = 50 MHz,
+      onChipRamSize  = 64 kB,
+      sdramLayout = IS42x320D.layout,
+      sdramTimings = IS42x320D.timingGrade7,
+      uartCtrlConfig = UartCtrlMemoryMappedConfig(
+        uartCtrlConfig = UartCtrlGenerics(
+          dataWidthMax      = 8,
+          clockDividerWidth = 20,
+          preSamplingSize   = 1,
+          samplingSize      = 5,
+          postSamplingSize  = 2
+        ),
+        txFifoDepth = 16,
+        rxFifoDepth = 16
+      ),
+      cpuPlugins = ArrayBuffer(
+        new PcManagerSimplePlugin(
+          resetVector = 0x80000000l,
+          relaxedPcCalculation = false
+        ),
+        new IBusCachedPlugin(
+          prediction = STATIC,
+          historyRamSizeLog2 = 8,
+          compressedGen = true,
+          config = InstructionCacheConfig(
+            cacheSize = 4096*4,
+            bytePerLine = 32,
+            wayCount = 1,
+            addressWidth = 32,
+            cpuDataWidth = 32,
+            memDataWidth = 32,
+            catchIllegalAccess = true,
+            catchAccessFault = true,
+            asyncTagMemory = false,
+            twoCycleRam = false,
+            twoCycleCache = false
+          )
+        ),
+        new DBusCachedPlugin(
+          config = new DataCacheConfig(
+            cacheSize         = 4096*4,
+            bytePerLine       = 32,
+            wayCount          = 1,
+            addressWidth      = 32,
+            cpuDataWidth      = 32,
+            memDataWidth      = 32,
+            catchAccessError  = true,
+            catchIllegal      = true,
+            catchUnaligned    = true
+          )
+        ),
+        new StaticMemoryTranslatorPlugin(
+          ioRange      = _(31 downto 28) === 0xF
+        ),
+        new DecoderSimplePlugin(
+          catchIllegalInstruction = true
+        ),
+        new RegFilePlugin(
+          regFileReadyKind = plugin.SYNC,
+          zeroBoot = false
+        ),
+        new IntAluPlugin,
+        new SrcPlugin(
+          separatedAddSub = false,
+          executeInsertion = true
+        ),
+        new FullBarrelShifterPlugin(earlyInjection = true),
+        new HazardSimplePlugin(
+          bypassExecute           = true,
+          bypassMemory            = true,
+          bypassWriteBack         = true,
+          bypassWriteBackBuffer   = true,
+          pessimisticUseSrc       = false,
+          pessimisticWriteRegFile = false,
+          pessimisticAddressMatch = false
+        ),
+        new MulPlugin,
+        new DivPlugin,
+        new CsrPlugin(CsrPluginConfig.small_mcount),
+        new BranchPlugin(
+          earlyBranch = true,
+          catchAddressMisaligned = true
+        ),
+        new YamlPlugin("cpu0.yaml")
+      )
+    )
+    config
+  }
 }
 
 
@@ -177,13 +1110,13 @@ class Briey(config: BrieyConfig) extends Component{
 
     //Main components IO
     val jtag       = slave(Jtag())
-    val sdram      = master(SdramInterface(sdramLayout))
+    //val sdram      = master(SdramInterface(sdramLayout))
 
     //Peripherals IO
     val gpioA         = master(TriStateArray(32 bits))
     val gpioB         = master(TriStateArray(32 bits))
     val uart          = master(Uart())
-    val vga           = master(Vga(vgaRgbConfig))
+    //val vga           = master(Vga(vgaRgbConfig))
     val timerExternal = in(PinsecTimerCtrlExternal())
     val coreInterrupt = in Bool
   }
@@ -240,13 +1173,13 @@ class Briey(config: BrieyConfig) extends Component{
       idWidth = 4
     )
 
-    val sdramCtrl = Axi4SharedSdramCtrl(
+    /*val sdramCtrl = Axi4SharedSdramCtrl(
       axiDataWidth = 32,
       axiIdWidth   = 4,
       layout       = sdramLayout,
       timing       = sdramTimings,
       CAS          = 3
-    )
+    )*/
 
 
     val apbBridge = Axi4SharedToApb3Bridge(
@@ -269,7 +1202,7 @@ class Briey(config: BrieyConfig) extends Component{
     val uartCtrl = Apb3UartCtrl(uartCtrlConfig)
 
 
-    val vgaCtrlConfig = Axi4VgaCtrlGenerics(
+    /*val vgaCtrlConfig = Axi4VgaCtrlGenerics(
       axiAddressWidth = 32,
       axiDataWidth    = 32,
       burstLength     = 8,
@@ -278,7 +1211,7 @@ class Briey(config: BrieyConfig) extends Component{
       rgbConfig       = vgaRgbConfig,
       vgaClock        = vgaClockDomain
     )
-    val vgaCtrl = Axi4VgaCtrl(vgaCtrlConfig)
+    val vgaCtrl = Axi4VgaCtrl(vgaCtrlConfig)*/
 
 
 
@@ -312,14 +1245,14 @@ class Briey(config: BrieyConfig) extends Component{
 
     axiCrossbar.addSlaves(
       ram.io.axi       -> (0x80000000L,   onChipRamSize),
-      sdramCtrl.io.axi -> (0x40000000L,   sdramLayout.capacity),
+      //sdramCtrl.io.axi -> (0x40000000L,   sdramLayout.capacity),
       apbBridge.io.axi -> (0xF0000000L,   1 MB)
     )
 
     axiCrossbar.addConnections(
-      core.iBus       -> List(ram.io.axi, sdramCtrl.io.axi),
-      core.dBus       -> List(ram.io.axi, sdramCtrl.io.axi, apbBridge.io.axi),
-      vgaCtrl.io.axi  -> List(            sdramCtrl.io.axi)
+      core.iBus       -> List(ram.io.axi),//, sdramCtrl.io.axi),
+      core.dBus       -> List(ram.io.axi, apbBridge.io.axi)//, sdramCtrl.io.axi, apbBridge.io.axi),
+      //vgaCtrl.io.axi  -> List(            sdramCtrl.io.axi)
     )
 
 
@@ -330,12 +1263,12 @@ class Briey(config: BrieyConfig) extends Component{
       crossbar.readRsp              << bridge.readRsp
     })
 
-    axiCrossbar.addPipelining(sdramCtrl.io.axi)((crossbar,ctrl) => {
+    /*axiCrossbar.addPipelining(sdramCtrl.io.axi)((crossbar,ctrl) => {
       crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
       crossbar.writeData            >/-> ctrl.writeData
       crossbar.writeRsp              <<  ctrl.writeRsp
       crossbar.readRsp               <<  ctrl.readRsp
-    })
+    })*/
 
     axiCrossbar.addPipelining(ram.io.axi)((crossbar,ctrl) => {
       crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
@@ -344,10 +1277,10 @@ class Briey(config: BrieyConfig) extends Component{
       crossbar.readRsp               <<  ctrl.readRsp
     })
 
-    axiCrossbar.addPipelining(vgaCtrl.io.axi)((ctrl,crossbar) => {
+    /*axiCrossbar.addPipelining(vgaCtrl.io.axi)((ctrl,crossbar) => {
       ctrl.readCmd.halfPipe()    >>  crossbar.readCmd
       ctrl.readRsp               <<  crossbar.readRsp
-    })
+    })*/
 
     axiCrossbar.addPipelining(core.dBus)((cpu,crossbar) => {
       cpu.sharedCmd             >>  crossbar.sharedCmd
@@ -365,8 +1298,8 @@ class Briey(config: BrieyConfig) extends Component{
         gpioACtrl.io.apb -> (0x00000, 4 kB),
         gpioBCtrl.io.apb -> (0x01000, 4 kB),
         uartCtrl.io.apb  -> (0x10000, 4 kB),
-        timerCtrl.io.apb -> (0x20000, 4 kB),
-        vgaCtrl.io.apb   -> (0x30000, 4 kB)
+        timerCtrl.io.apb -> (0x20000, 4 kB)//,
+        //vgaCtrl.io.apb   -> (0x30000, 4 kB)
       )
     )
   }
@@ -375,8 +1308,8 @@ class Briey(config: BrieyConfig) extends Component{
   io.gpioB          <> axi.gpioBCtrl.io.gpio
   io.timerExternal  <> axi.timerCtrl.io.external
   io.uart           <> axi.uartCtrl.io.uart
-  io.sdram          <> axi.sdramCtrl.io.sdram
-  io.vga            <> axi.vgaCtrl.io.vga
+  //io.sdram          <> axi.sdramCtrl.io.sdram
+  //io.vga            <> axi.vgaCtrl.io.vga
 }
 
 //DE1-SoC
@@ -384,9 +1317,9 @@ object Briey{
   def main(args: Array[String]) {
     val config = SpinalConfig()
     config.generateVerilog({
-      val toplevel = new Briey(BrieyConfig.default)
-      toplevel.axi.vgaCtrl.vga.ctrl.io.error.addAttribute(Verilator.public)
-      toplevel.axi.vgaCtrl.vga.ctrl.io.frameStart.addAttribute(Verilator.public)
+      val toplevel = new Briey(BrieyConfig.trinamic10)
+      //toplevel.axi.vgaCtrl.vga.ctrl.io.error.addAttribute(Verilator.public)
+      //toplevel.axi.vgaCtrl.vga.ctrl.io.frameStart.addAttribute(Verilator.public)
       toplevel
     })
   }
@@ -398,8 +1331,8 @@ object BrieyWithMemoryInit{
     val config = SpinalConfig()
     config.generateVerilog({
       val toplevel = new Briey(BrieyConfig.default)
-      toplevel.axi.vgaCtrl.vga.ctrl.io.error.addAttribute(Verilator.public)
-      toplevel.axi.vgaCtrl.vga.ctrl.io.frameStart.addAttribute(Verilator.public)
+      //toplevel.axi.vgaCtrl.vga.ctrl.io.error.addAttribute(Verilator.public)
+      //toplevel.axi.vgaCtrl.vga.ctrl.io.frameStart.addAttribute(Verilator.public)
       HexTools.initRam(toplevel.axi.ram.ram, "src/main/ressource/hex/muraxDemo.hex", 0x80000000l)
       toplevel
     })

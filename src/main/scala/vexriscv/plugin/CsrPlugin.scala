@@ -80,7 +80,9 @@ case class CsrPluginConfig(
 object CsrPluginConfig{
   def all : CsrPluginConfig = all(0x00000020l)
   def small : CsrPluginConfig = small(0x00000020l)
+  def small_mcount : CsrPluginConfig = smallest_trinamic(0x00000020l)
   def smallest : CsrPluginConfig = smallest(0x00000020l)
+  def smallest_trinamic : CsrPluginConfig = smallest_trinamic(0x00000020l)
   def linuxMinimal(mtVecInit : BigInt) = CsrPluginConfig(
     catchIllegalAccess  = true,
     mvendorid           = 1,
@@ -234,6 +236,27 @@ object CsrPluginConfig{
     ucycleAccess   = CsrAccess.NONE
   )
 
+  def small_mcount(mtvecInit : BigInt)  = CsrPluginConfig(
+    catchIllegalAccess = false,
+    mvendorid      = null,
+    marchid        = null,
+    mimpid         = null,
+    mhartid        = null,
+    misaExtensionsInit = 66,
+    misaAccess     = CsrAccess.NONE,
+    mtvecAccess    = CsrAccess.NONE,
+    mtvecInit      = mtvecInit,
+    mepcAccess     = CsrAccess.READ_WRITE,
+    mscratchGen    = false,
+    mcauseAccess   = CsrAccess.READ_ONLY,
+    mbadaddrAccess = CsrAccess.READ_ONLY,
+    mcycleAccess   = CsrAccess.READ_ONLY,
+    minstretAccess = CsrAccess.NONE,
+    ecallGen       = false,
+    wfiGenAsWait         = false,
+    ucycleAccess   = CsrAccess.NONE
+  )
+
   def smallest(mtvecInit : BigInt)  = CsrPluginConfig(
     catchIllegalAccess = false,
     mvendorid      = null,
@@ -252,6 +275,27 @@ object CsrPluginConfig{
     minstretAccess = CsrAccess.NONE,
     ecallGen       = false,
     wfiGenAsWait         = false,
+    ucycleAccess   = CsrAccess.NONE
+  )
+
+  def smallest_trinamic(mtvecInit : BigInt)  = CsrPluginConfig(
+    catchIllegalAccess = false,
+    mvendorid      = null,
+    marchid        = null,
+    mimpid         = null,
+    mhartid        = null,
+    misaExtensionsInit = 66,
+    misaAccess     = CsrAccess.READ_ONLY,
+    mtvecAccess    = CsrAccess.READ_ONLY,
+    mtvecInit      = mtvecInit,
+    mepcAccess     = CsrAccess.NONE,
+    mscratchGen    = false,
+    mcauseAccess   = CsrAccess.READ_ONLY,
+    mbadaddrAccess = CsrAccess.NONE,
+    mcycleAccess   = CsrAccess.READ_ONLY,
+    minstretAccess = CsrAccess.NONE,
+    ecallGen       = false,
+    wfiGenAsWait   = false,
     ucycleAccess   = CsrAccess.NONE
   )
 
