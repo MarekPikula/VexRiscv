@@ -131,15 +131,17 @@ class usb_serial(usbConfig: USBSerialConfig) extends BlackBox {
 class usb_phy() extends BlackBox {
   val io = new Bundle {
     val clk         = in Bool
-    val rst         = in Bool
+    val rstp        = in Bool
     val phy_tx_mode = in Bool
     val usb_rst     = out Bool
-    val txdp        = out Bool
-    val txdn        = out Bool
-    val txoe        = out Bool
+    // Transciever Interface
     val rxd         = in Bool
     val rxdp        = in Bool
     val rxdn        = in Bool
+    val txdp        = out Bool
+    val txdn        = out Bool
+    val txoe        = out Bool
+    // UTMI Interface
     val DataOut_i   = in Bits(8 bits)
     val TxValid_i   = in Bool
     val TxReady_o   = out Bool
@@ -150,7 +152,7 @@ class usb_phy() extends BlackBox {
     val LineState_o = out Bits(2 bits)
   }
 
-  mapClockDomain(clock = io.clk, reset = io.rst)
+  mapClockDomain(clock = io.clk, reset = io.rstp)
   noIoPrefix()
 }
 
@@ -200,29 +202,6 @@ case class Apb3UsbSerial(usbConfig : USBSerialConfig) extends Component {
 
   // Clock domains
   val utmiClockDomain = ClockDomain.external("utmi", frequency = FixedFrequency(60 MHz))
-  val phyClockDomain  = ClockDomain.external("usb_phy", frequency = FixedFrequency(48 MHz))
-
-  // CDC between usb_serial and usb_phy
-  val utmi = new Area {
-    val tx = new StreamCCByToggle(
-      dataType = Bits(8 bits),
-      inputClock = utmiClockDomain,
-      outputClock = phyClockDomain
-    )
-    val rx = new FlowCCByToggle(
-      dataType = Bits(8 bits),
-      inputClock = phyClockDomain,
-      outputClock = utmiClockDomain
-    )
-    val rxActive  = False
-    rxActive.allowOverride
-
-    val rxError   = False
-    rxError.allowOverride
-
-    val lineState = B"00"
-    lineState.allowOverride
-  }
 
   // CDC between APB and usb_serial
   val rxStream = new StreamCCByToggle(
@@ -239,91 +218,72 @@ case class Apb3UsbSerial(usbConfig : USBSerialConfig) extends Component {
 
   // usb_serial instantiation within separate clock domain
   val utmiClockArea = new ClockingArea(utmiClockDomain) {
-    val usbSerial = new usb_serial(usbConfig)
+    val usbSerialArea = new Area {
+      val usbSerial = new usb_serial(usbConfig)
 
-    val apbArea = new Area {
+      val apbArea = new Area {
+        // Input signals to core
+        val txCork = BufferCC(ctrl.txCork, False)
+        usbSerial.io.TXCORK <> txCork
+
+        // RX/TX data streams
+        val rx = new Stream(Bits(8 bits))
+        usbSerial.io.RXDAT <> rx.payload
+        usbSerial.io.RXRDY <> rx.ready
+        usbSerial.io.RXVAL <> rx.valid
+        rxStream.io.input << rx
+
+        val tx = new Flow(Bits(8 bits))
+        usbSerial.io.TXDAT <> tx.payload
+        usbSerial.io.TXVAL <> tx.valid
+        txFlow.io.output >> tx
+      }
+    }
+
+    val usbPhyArea = new Area {
+      val usbPhy = new usb_phy()
+
       // Input signals to core
-      val txCork = BufferCC(ctrl.txCork, False)
-      usbSerial.io.TXCORK <> txCork
+      val softCon   = BufferCC(ctrl.softCon,   False)
+      val phyTxMode = BufferCC(ctrl.phyTxMode, False)
+      phyTxMode <> usbPhy.io.phy_tx_mode
 
-      // RX/TX data streams
-      val rx = new Stream(Bits(8 bits))
-      usbSerial.io.RXDAT <> rx.payload
-      usbSerial.io.RXRDY <> rx.ready
-      usbSerial.io.RXVAL <> rx.valid
-      rxStream.io.input << rx
-
-      val tx = new Flow(Bits(8 bits))
-      usbSerial.io.TXDAT <> tx.payload
-      usbSerial.io.TXVAL <> tx.valid
-      txFlow.io.output >> tx
+      val phyArea = new Area {
+        io.usb.OEn     <> usbPhy.io.txoe
+        io.usb.RCV     <> usbPhy.io.rxd
+        io.usb.VP      <> usbPhy.io.rxdp
+        io.usb.VM      <> usbPhy.io.rxdn
+        io.usb.SUSPND  := False //<> utmiClockArea.usbSerial.io.SUSPEND
+        io.usb.MODE    <> phyTxMode
+        io.usb.SPEED   := True // FS, since usb_phy only supports FS
+        io.usb.VPO     <> usbPhy.io.txdp
+        io.usb.VMO     <> usbPhy.io.txdn
+        io.usb.SOFTCON <> softCon
+      }
     }
 
     val utmiArea = new Area {
-      val rx = Flow(Bits(8 bits))
-      rx.payload <> usbSerial.io.PHY.DATAIN
-      rx.valid   <> usbSerial.io.PHY.RXVALID
-      utmi.rx.io.output >> rx
+      usbSerialArea.usbSerial.io.PHY.DATAIN    <> usbPhyArea.usbPhy.io.DataIn_o
+      usbSerialArea.usbSerial.io.PHY.RXVALID   <> usbPhyArea.usbPhy.io.RxValid_o
+      usbSerialArea.usbSerial.io.PHY.RXACTIVE  <> usbPhyArea.usbPhy.io.RxActive_o
+      usbSerialArea.usbSerial.io.PHY.RXERROR   <> usbPhyArea.usbPhy.io.RxError_o
 
-      val tx = Stream(Bits(8 bits))
-      tx.payload <> usbSerial.io.PHY.DATAOUT
-      tx.ready   <> usbSerial.io.PHY.TXREADY
-      tx.valid   <> usbSerial.io.PHY.TXVALID
-      utmi.tx.io.input << tx
+      usbSerialArea.usbSerial.io.PHY.DATAOUT   <> usbPhyArea.usbPhy.io.DataOut_i
+      usbSerialArea.usbSerial.io.PHY.TXREADY   <> usbPhyArea.usbPhy.io.TxReady_o
+      usbSerialArea.usbSerial.io.PHY.TXVALID   <> usbPhyArea.usbPhy.io.TxValid_i
 
-      usbSerial.io.PHY.RXACTIVE  <> BufferCC(utmi.rxActive, False)
-      usbSerial.io.PHY.RXERROR   <> BufferCC(utmi.rxError, False)
-      usbSerial.io.PHY.LINESTATE <> BufferCC(utmi.lineState, B"00")
-    }
-  }
-
-  val phyClockArea : ClockingArea = new ClockingArea(phyClockDomain) {
-    val usbPhy = new usb_phy()
-
-    // Input signals to core
-    val phyTxMode = BufferCC(ctrl.phyTxMode, False)
-    val softCon   = BufferCC(ctrl.softCon,   False)
-
-    val utmiArea = new Area {
-      val rx = new Flow(Bits(8 bits))
-      rx.payload <> usbPhy.io.DataIn_o
-      rx.valid   <> usbPhy.io.RxValid_o
-      utmi.rx.io.input << rx
-
-      val tx = new Stream(Bits(8 bits))
-      tx.payload <> usbPhy.io.DataOut_i
-      tx.valid   <> usbPhy.io.TxValid_i
-      tx.ready   <> usbPhy.io.TxReady_o
-      utmi.tx.io.output >> tx
-
-      utmi.rxActive  <> usbPhy.io.RxActive_o
-      utmi.rxError   <> usbPhy.io.RxError_o
-      utmi.lineState <> usbPhy.io.LineState_o
-      phyTxMode      <> usbPhy.io.phy_tx_mode
-    }
-
-    val phyArea = new Area {
-      io.usb.OEn     <> usbPhy.io.txoe
-      io.usb.RCV     <> usbPhy.io.rxd
-      io.usb.VP      <> usbPhy.io.rxdp
-      io.usb.VM      <> usbPhy.io.rxdn
-      io.usb.SUSPND  := False //<> utmiClockArea.usbSerial.io.SUSPEND
-      io.usb.MODE    <> phyTxMode
-      io.usb.SPEED   := True // FS, since usb_phy only supports FS
-      io.usb.VPO     <> usbPhy.io.txdp
-      io.usb.VMO     <> usbPhy.io.txdn
-      io.usb.SOFTCON <> softCon
+      usbSerialArea.usbSerial.io.PHY.LINESTATE <> usbPhyArea.usbPhy.io.LineState_o
     }
   }
 
   // Status signals from core
-  val usbRst    = BufferCC(utmiClockArea.usbSerial.io.USBRST,    False)
-  val highSpeed = BufferCC(utmiClockArea.usbSerial.io.HIGHSPEED, False)
-  val suspend   = BufferCC(utmiClockArea.usbSerial.io.SUSPEND,   False)
-  val online    = BufferCC(utmiClockArea.usbSerial.io.ONLINE,    False)
-  val rxLen     = BufferCC(utmiClockArea.usbSerial.io.RXLEN,     B(0, log2Up(usbConfig.rxBufSize) bits))
-  val txRoom    = BufferCC(utmiClockArea.usbSerial.io.TXROOM,    B(0, log2Up(usbConfig.txBufSize) bits))
-  val txRdy     = BufferCC(utmiClockArea.usbSerial.io.TXRDY,     False)
+  val usbRst    = BufferCC(utmiClockArea.usbSerialArea.usbSerial.io.USBRST,    False)
+  val highSpeed = BufferCC(utmiClockArea.usbSerialArea.usbSerial.io.HIGHSPEED, False)
+  val suspend   = BufferCC(utmiClockArea.usbSerialArea.usbSerial.io.SUSPEND,   False)
+  val online    = BufferCC(utmiClockArea.usbSerialArea.usbSerial.io.ONLINE,    False)
+  val rxLen     = BufferCC(utmiClockArea.usbSerialArea.usbSerial.io.RXLEN,     B(0, log2Up(usbConfig.rxBufSize) bits))
+  val txRoom    = BufferCC(utmiClockArea.usbSerialArea.usbSerial.io.TXROOM,    B(0, log2Up(usbConfig.txBufSize) bits))
+  val txRdy     = BufferCC(utmiClockArea.usbSerialArea.usbSerial.io.TXRDY,     False)
 
   // Interrups TODO
   io.interrupt := False
