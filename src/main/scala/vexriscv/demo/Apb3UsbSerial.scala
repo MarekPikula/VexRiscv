@@ -150,6 +150,10 @@ class usb_phy() extends BlackBox {
     val RxActive_o  = out Bool
     val RxError_o   = out Bool
     val LineState_o = out Bits(2 bits)
+    // Flags
+    val sync_err_o      = out Bool
+    val bit_stuff_err_o = out Bool
+    val byte_err_o      = out Bool
   }
 
   mapClockDomain(clock = io.clk, reset = io.rstp)
@@ -197,9 +201,8 @@ case class Apb3UsbSerial(usbConfig : USBSerialConfig) extends Component {
   val ctrl = new Area {
     val txCork    = RegInit(False)  // (Serial) Temporarily suppress transmissions at the outgoing endpoint.
     val softCon   = RegInit(True)  // (PHY) Software-controlled USB connection. A HIGH level applies 3.3 V to pin Vpu(3.3).
-    val phyTxMode = RegInit(True)  // (PHY) Selects the PHY Transmit Mode. Consult datasheet for details.
-    val speed     = RegInit(True)  // (TRNS) Change speed flag
-    io.usb.SPEED <> speed
+    //val phyTxMode = RegInit(True)  // (PHY) Selects the PHY Transmit Mode. Consult datasheet for details.
+    val reset     = RegInit(False)
   }
 
   // Clock domains
@@ -220,7 +223,7 @@ case class Apb3UsbSerial(usbConfig : USBSerialConfig) extends Component {
 
   // usb_serial instantiation within separate clock domain
   val utmiClockArea = new ClockingArea(utmiClockDomain) {
-    val usbSerialArea = new Area {
+    val usbSerialArea = new ResetArea(ctrl.reset, true) {
       val usbSerial = new usb_serial(usbConfig)
 
       val apbArea = new Area {
@@ -242,25 +245,41 @@ case class Apb3UsbSerial(usbConfig : USBSerialConfig) extends Component {
       }
     }
 
-    val usbPhyArea = new Area {
+    val usbPhyArea = new ResetArea(ctrl.reset | usbSerialArea.usbSerial.io.USBRST, true) {
       val usbPhy = new usb_phy()
 
       // Input signals to core
       val softCon   = BufferCC(ctrl.softCon,   False)
-      val phyTxMode = BufferCC(ctrl.phyTxMode, False)
-      phyTxMode <> usbPhy.io.phy_tx_mode
+      //val phyTxMode = BufferCC(ctrl.phyTxMode, False)
+      //phyTxMode <> usbPhy.io.phy_tx_mode
+      usbPhy.io.phy_tx_mode := True
 
-      val phyArea = new Area {
-        io.usb.OEn     <> usbPhy.io.txoe
-        io.usb.RCV     <> usbPhy.io.rxd
-        io.usb.VP      <> usbPhy.io.rxdp
-        io.usb.VM      <> usbPhy.io.rxdn
+      // Status
+      val syncErrCnt     = Reg(UInt(32 bits)) addTag(crossClockDomain)
+      val bitStuffErrCnt = Reg(UInt(32 bits)) addTag(crossClockDomain)
+      val byteErrCnt     = Reg(UInt(32 bits)) addTag(crossClockDomain)
+
+      when (usbPhy.io.sync_err_o) {
+        syncErrCnt := syncErrCnt + 1
+      }
+      when (usbPhy.io.bit_stuff_err_o) {
+        bitStuffErrCnt := bitStuffErrCnt + 1
+      }
+      when (usbPhy.io.byte_err_o) {
+        byteErrCnt := byteErrCnt + 1
+      }
+
+      val phyArea = new Area {//new SlowArea(12 MHz) {
+        io.usb.OEn     := usbPhy.io.txoe
+        io.usb.VPO     := usbPhy.io.txdp
+        io.usb.VMO     := usbPhy.io.txdn
+        usbPhy.io.rxd  := io.usb.RCV //RegNext(io.usb.RCV)
+        usbPhy.io.rxdp := io.usb.VP  //RegNext(io.usb.VP)
+        usbPhy.io.rxdn := io.usb.VM  //RegNext(io.usb.VM)
         io.usb.SUSPND  := False //<> utmiClockArea.usbSerial.io.SUSPEND
-        io.usb.MODE    <> phyTxMode
-        //io.usb.SPEED   := True // FS, since usb_phy only supports FS
-        io.usb.VPO     <> usbPhy.io.txdp
-        io.usb.VMO     <> usbPhy.io.txdn
-        io.usb.SOFTCON <> softCon
+        io.usb.MODE    := True //<> phyTxMode
+        io.usb.SPEED   := True // FS, since usb_phy only supports FS
+        io.usb.SOFTCON := softCon
       }
     }
 
@@ -304,10 +323,14 @@ case class Apb3UsbSerial(usbConfig : USBSerialConfig) extends Component {
       4 -> txRdy)
 
     // 0x04 CTRL register
-    bus.driveAndRead(ctrl.txCork,    0x4, 0)
-    bus.driveAndRead(ctrl.softCon,   0x4, 1)
-    bus.driveAndRead(ctrl.phyTxMode, 0x4, 2)
-    bus.driveAndRead(ctrl.speed,     0x4, 3)
+    bus.driveAndRead(ctrl.softCon,   0x4, 0)
+    bus.driveAndRead(ctrl.txCork,    0x4, 1)
+    //bus.driveAndRead(ctrl.phyTxMode, 0x4, 2)
+    bus.driveAndRead(ctrl.reset,     0x4, 2)
+    bus.write(ctrl.reset, 0x4, 2)
+    when (bus.isWriting(0x4)) {
+      ctrl.reset := False;
+    }
 
     // 0x08 INT_STAT – interrupt status register
     // 0x0C INT_MASK – interrupt mask register
@@ -322,5 +345,12 @@ case class Apb3UsbSerial(usbConfig : USBSerialConfig) extends Component {
 
     // TX FIFO interface
     bus.driveFlow(txFlow.io.input, 0x18)
+
+    // 0x20 syncErrCnt
+    bus.read(utmiClockArea.usbPhyArea.syncErrCnt,     0x20)
+    // 0x24 bitStuffErrCnt
+    bus.read(utmiClockArea.usbPhyArea.bitStuffErrCnt, 0x24)
+    // 0x28 byteErrCnt
+    bus.read(utmiClockArea.usbPhyArea.byteErrCnt,     0x28)
   }
 }
